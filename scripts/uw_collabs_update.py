@@ -106,6 +106,7 @@ def get_publications_dataframe(works: Iterable) -> pd.DataFrame:
                         institution_id = institution["id"]
                         institution_name = institution["display_name"]
                         institution_country_code = institution["country_code"]
+                        institution_lineage = institution.get("lineage", [])
                         data.append(
                             {
                                 "work_id": work["id"],
@@ -120,6 +121,7 @@ def get_publications_dataframe(works: Iterable) -> pd.DataFrame:
                                 "institution_id": institution_id,
                                 "institution_name": institution_name,
                                 "institution_country_code": institution_country_code,
+                                "institution_toplevel": institution_lineage[-1] if institution_lineage else None,
                             }
                         )
     df = pd.DataFrame(data)
@@ -166,6 +168,7 @@ def get_institutions_dataframe(institutions: Iterable) -> pd.DataFrame:
                 "display_name": institution["display_name"],
                 "country_code": institution["country_code"],
                 "type": institution["type"],
+                "lineage": institution.get("lineage"),
                 "latitude": institution["geo"]["latitude"],
                 "longitude": institution["geo"]["longitude"],
                 "city": institution["geo"]["city"],
@@ -208,16 +211,18 @@ def main(args):
     logger.info(
         f"dataframe has {len(df_collab):,} rows, with {df_collab['work_id'].nunique():,} unique publications"
     )
-    outfp = outdir.joinpath('uw_collab_update_publications.csv')
-    logger.info(f"Saving publications to: {outfp}")
-    df_collab.to_csv(outfp, index=False)
 
-    institution_ids = df_collab["institution_id"].dropna().unique()
+    institution_ids = pd.concat([df_collab["institution_id"], df_collab['institution_toplevel']]).dropna().unique()
     institutions = query_institutions_data(institution_ids=institution_ids, email=email)
     df_institutions = get_institutions_dataframe(institutions)
     outfp = outdir.joinpath('uw_collab_update_institutions.csv')
     logger.info(f"Saving institutions to: {outfp}")
     df_institutions.to_csv(outfp, index=False)
+
+    df_collab['institution_toplevel_name'] = df_collab['institution_toplevel'].map(df_institutions.set_index('id')['display_name'])
+    outfp = outdir.joinpath('uw_collab_update_publications.csv')
+    logger.info(f"Saving publications to: {outfp}")
+    df_collab.to_csv(outfp, index=False)
 
 
 if __name__ == "__main__":
@@ -240,7 +245,7 @@ if __name__ == "__main__":
         "outdir", help="output directory (will be created if it doesn't exist)."
     )
     parser.add_argument(
-        "email", help="email addressed used to identify user to the OpenAlex API"
+        "email", help="email address used to identify user to the OpenAlex API"
     )
     parser.add_argument("--debug", action="store_true", help="output debugging info")
     global args
