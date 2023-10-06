@@ -121,7 +121,9 @@ def get_publications_dataframe(works: Iterable) -> pd.DataFrame:
                                 "institution_id": institution_id,
                                 "institution_name": institution_name,
                                 "institution_country_code": institution_country_code,
-                                "institution_toplevel": institution_lineage[-1] if institution_lineage else None,
+                                "institution_toplevel": institution_lineage[-1]
+                                if institution_lineage
+                                else None,
                             }
                         )
     df = pd.DataFrame(data)
@@ -189,12 +191,13 @@ def main(args):
         logger.info(f"Output directory does not exist. Creating directory: {outdir}")
         outdir.mkdir(parents=True)
 
-    uw_id = "https://ror.org/00cvxb145"
+    ror_id = args.ror
+    logger.info(f"Using ROR ID(s): {ror_id}")
     from_publication_date = args.from_publication_date
     email = args.email
 
     works = query_publications_data(
-        institution_id=uw_id, from_publication_date=from_publication_date, email=email
+        institution_id=ror_id, from_publication_date=from_publication_date, email=email
     )
 
     df_publications = get_publications_dataframe(works)
@@ -212,15 +215,21 @@ def main(args):
         f"dataframe has {len(df_collab):,} rows, with {df_collab['work_id'].nunique():,} unique publications"
     )
 
-    institution_ids = pd.concat([df_collab["institution_id"], df_collab['institution_toplevel']]).dropna().unique()
+    institution_ids = (
+        pd.concat([df_collab["institution_id"], df_collab["institution_toplevel"]])
+        .dropna()
+        .unique()
+    )
     institutions = query_institutions_data(institution_ids=institution_ids, email=email)
     df_institutions = get_institutions_dataframe(institutions)
-    outfp = outdir.joinpath('uw_collab_update_institutions.csv')
+    outfp = outdir.joinpath("uw_collab_update_institutions.csv")
     logger.info(f"Saving institutions to: {outfp}")
     df_institutions.to_csv(outfp, index=False)
 
-    df_collab['institution_toplevel_name'] = df_collab['institution_toplevel'].map(df_institutions.set_index('id')['display_name'])
-    outfp = outdir.joinpath('uw_collab_update_publications.csv')
+    df_collab["institution_toplevel_name"] = df_collab["institution_toplevel"].map(
+        df_institutions.set_index("id")["display_name"]
+    )
+    outfp = outdir.joinpath("uw_collab_update_publications.csv")
     logger.info(f"Saving publications to: {outfp}")
     df_collab.to_csv(outfp, index=False)
 
@@ -246,6 +255,11 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "email", help="email address used to identify user to the OpenAlex API"
+    )
+    parser.add_argument(
+        "--ror",
+        default="https://ror.org/00cvxb145",
+        help="""ROR ID(s) used to find works. To use multiple IDs, separate them with a pipe (`|`) symbol, e.g., "https://ror.org/01njes783|https://ror.org/00cvxb145". (IMPORTANT: You must enclose this in double quotes.) Default is 'https://ror.org/00cvxb145' (University of Washington)""",
     )
     parser.add_argument("--debug", action="store_true", help="output debugging info")
     global args
