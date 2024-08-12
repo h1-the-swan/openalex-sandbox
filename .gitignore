@@ -2,3 +2,5 @@ venv
 data
 output/
 .env
+scratch/
+.vscode/
